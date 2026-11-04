@@ -100,19 +100,46 @@ export function mountSnake(container) {
   return () => { clearInterval(timer); unbind(); };
 }
 
+// Five roads, each busier and faster than the last. Lane: [row, speed, car length, cars].
+// Negative speed drives left. Level 1 is gentle; level 5 is tough but leaves gaps.
+const LEVELS = [
+  [[14, .028, 2, 1], [11, -.032, 3, 1], [8, .030, 2, 1], [5, -.026, 2, 1]],
+  [[15, .036, 2, 1], [13, -.040, 3, 1], [10, .044, 2, 2], [7, -.038, 2, 1], [4, .042, 3, 1]],
+  [[15, .046, 2, 2], [13, -.050, 3, 1], [11, .054, 2, 2], [8, -.048, 2, 2], [6, .052, 3, 1], [4, -.058, 2, 2]],
+  [[16, .052, 2, 2], [14, -.058, 3, 2], [12, .062, 2, 2], [10, -.056, 2, 2], [8, .066, 3, 1], [6, -.060, 2, 2], [4, .064, 2, 2]],
+  [[16, .060, 2, 2], [15, -.066, 3, 2], [13, .072, 2, 2], [12, -.064, 2, 3], [10, .078, 3, 2], [8, -.070, 2, 2], [6, .074, 2, 3], [4, -.082, 3, 2]],
+];
+const CAR_COLOURS = ['#ff3153', '#f4bf4f', '#8d75ff', '#ff7d4d', '#5db7ff', '#ff6fd8', '#aef1ff', '#c4f347'];
+const CONFETTI = ['#25f2db', '#f4bf4f', '#ff7d4d', '#8d75ff', '#aeea6d', '#ff6fd8', '#eef7f8'];
+
 export function mountFrogger(container) {
   const ui = machine(container, { width: 360, height: 400, label: 'Playable Frogger game', help: 'Arrow keys, WASD or the buttons. Reach the green zone.' });
   const context = ui.canvas.getContext('2d');
-  const cars = [
-    { x: 1, y: 15, speed: .035, length: 2, colour: '#ff3153' },
-    { x: 11, y: 13, speed: -.052, length: 3, colour: '#f4bf4f' },
-    { x: 5, y: 10, speed: .066, length: 2, colour: '#8d75ff' },
-    { x: 14, y: 7, speed: -.043, length: 2, colour: '#ff7d4d' },
-    { x: 2, y: 4, speed: .058, length: 3, colour: '#5db7ff' },
-  ];
-  let frog = { x: 8, y: 18 }, lives = 3, score = 0, running = false, animation = 0, lastTime = 0;
-  const readout = () => { ui.score.textContent = `SCORE ${String(score).padStart(4, '0')} · LIVES ${lives}`; };
-  readout();
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let level = 0, cars = [], frog = { x: 8, y: 18 }, lives = 3, score = 0;
+  let running = false, celebrating = false, animation = 0, lastTime = 0, party = [], partyStart = 0;
+
+  function buildRoad() {
+    cars = [];
+    LEVELS[level].forEach(([y, speed, length, count], lane) => {
+      const span = 19 + length;
+      for (let i = 0; i < count; i++) {
+        cars.push({ y, speed, length, x: ((lane * 5 + i * span / count) % span) - length, colour: CAR_COLOURS[(lane + level) % CAR_COLOURS.length] });
+      }
+    });
+    Object.assign(ui.canvas.dataset, { level: level + 1, cars: cars.length, lanes: LEVELS[level].length,
+      speed: Math.max(...cars.map(car => Math.abs(car.speed))).toFixed(3) });
+  }
+  const readout = () => { ui.score.textContent = `LEVEL ${level + 1}/5 · SCORE ${String(score).padStart(4, '0')} · LIVES ${lives}`; };
+
+  function drawFrog(x, y, size) {
+    context.fillStyle = '#aeea6d';
+    context.fillRect(x + size * .1, y + size * .1, size * .8, size * .8);
+    context.fillStyle = '#020811';
+    const eye = Math.max(3, Math.round(size / 7));
+    context.fillRect(x + size * .2, y + size * .2, eye, eye);
+    context.fillRect(x + size * .8 - eye, y + size * .2, eye, eye);
+  }
   function draw() {
     const cell = ui.canvas.width / 18;
     context.fillStyle = '#06111f';
@@ -120,22 +147,93 @@ export function mountFrogger(container) {
     context.fillStyle = '#0a513f';
     context.fillRect(0, 0, ui.canvas.width, cell * 2);
     context.fillRect(0, cell * 17, ui.canvas.width, cell * 3);
+    const rows = LEVELS[level].map(lane => lane[0]);
+    context.fillStyle = '#0d1a2b';
+    rows.forEach(row => context.fillRect(0, row * cell, ui.canvas.width, cell));
     context.fillStyle = 'rgba(238,247,248,.16)';
-    [4, 7, 10, 13, 15].forEach(row => { for (let x = 0; x < 18; x += 2) context.fillRect(x * cell, row * cell - 1, cell, 2); });
+    rows.forEach(row => { for (let x = 0; x < 18; x += 2) context.fillRect(x * cell, row * cell - 1, cell, 2); });
     cars.forEach(car => {
       context.fillStyle = car.colour;
       context.fillRect(car.x * cell, car.y * cell + 3, car.length * cell, cell - 6);
       context.fillStyle = '#020811';
-      context.fillRect((car.x + .35) * cell, car.y * cell + 6, cell * .45, cell * .35);
+      const windscreen = car.speed > 0 ? car.x + car.length - .8 : car.x + .35;
+      context.fillRect(windscreen * cell, car.y * cell + 6, cell * .45, cell * .35);
     });
-    context.fillStyle = '#aeea6d';
-    context.fillRect(frog.x * cell + 2, frog.y * cell + 2, cell - 4, cell - 4);
-    context.fillStyle = '#020811';
-    context.fillRect(frog.x * cell + 5, frog.y * cell + 5, 3, 3);
-    context.fillRect(frog.x * cell + cell - 8, frog.y * cell + 5, 3, 3);
+    drawFrog(frog.x * cell, frog.y * cell, cell);
+    context.fillStyle = '#eef7f8';
+    context.font = "16px 'FLM1 Pixel', monospace";
+    context.textBaseline = 'middle';
+    context.fillText(`LEVEL ${level + 1}`, 8, cell);
   }
-  function animate(time) {
+  function drawParty(time) {
+    const { width, height } = ui.canvas;
+    const t = (time - partyStart) / 1000;
+    context.fillStyle = '#06111f';
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = '#0a513f';
+    context.fillRect(0, height * .72, width, height * .28);
+    party.forEach(bit => {
+      const y = (bit.y + t * bit.fall * 60) % (height + 20) - 10;
+      const x = bit.x + Math.sin(t * bit.wobble + bit.phase) * 8;
+      context.fillStyle = bit.colour;
+      if (bit.sparkle) {
+        const on = Math.sin(t * 6 + bit.phase) > 0;
+        if (on) { context.fillRect(x - 1, y - 5, 2, 10); context.fillRect(x - 5, y - 1, 10, 2); }
+      } else context.fillRect(Math.round(x), Math.round(y), bit.size, bit.size);
+    });
+    const size = 72;
+    const hop = calm ? 0 : Math.abs(Math.sin(t * 4.2)) * 70;
+    const squash = calm ? 0 : Math.max(0, 1 - Math.abs(Math.sin(t * 4.2)) * 6) * 8;
+    const x = width / 2 - size / 2, y = height * .72 - size - hop;
+    context.fillStyle = 'rgba(2,8,17,.35)';
+    context.fillRect(width / 2 - 30 + hop / 6, height * .72 - 4, 60 - hop / 3, 6);
+    context.save();
+    context.translate(0, squash);
+    drawFrog(x - squash / 2, y, size);
+    context.fillStyle = '#aeea6d';
+    const arm = Math.sin(t * 8.4) > 0 ? -18 : -8;
+    context.fillRect(x - 8, y + 20 + arm, 10, 22);
+    context.fillRect(x + size - 2, y + 20 + arm, 10, 22);
+    context.fillStyle = '#020811';
+    context.fillRect(x + size * .35, y + size * .58, size * .3, 6);
+    context.restore();
+    context.fillStyle = '#f4bf4f';
+    context.font = "28px 'FLM1 Pixel', monospace";
+    context.textAlign = 'center';
+    context.fillText('YOU DID IT!', width / 2, height * .16);
+    context.textAlign = 'start';
+  }
+  function celebrate() {
+    running = false;
+    celebrating = true;
+    ui.canvas.dataset.celebrating = 'true';
+    ui.status.textContent = 'ALL 5 LEVELS!';
+    ui.start.textContent = 'PLAY AGAIN';
+    party = Array.from({ length: 70 }, (_, i) => ({ x: Math.random() * ui.canvas.width, y: Math.random() * ui.canvas.height,
+      fall: .4 + Math.random() * .9, wobble: 1 + Math.random() * 3, phase: Math.random() * 6, size: 4 + Math.floor(Math.random() * 4),
+      colour: CONFETTI[i % CONFETTI.length], sparkle: i % 7 === 0 }));
+    partyStart = performance.now();
+    drawParty(partyStart);
+    if (!calm && !animation) animation = requestAnimationFrame(loop);
+  }
+  function crossed() {
+    score += 100;
+    if (level === LEVELS.length - 1) { readout(); celebrate(); return; }
+    level += 1;
+    lives = 3;
+    frog = { x: 8, y: 18 };
+    buildRoad();
+    readout();
+    ui.status.textContent = `LEVEL ${level + 1}!`;
+    draw();
+  }
+  function loop(time) {
     animation = 0;
+    if (celebrating) {
+      drawParty(time);
+      animation = requestAnimationFrame(loop);
+      return;
+    }
     if (!running) return;
     if (time - lastTime > 22) {
       lastTime = time;
@@ -152,23 +250,29 @@ export function mountFrogger(container) {
       }
       draw();
     }
-    if (running) animation = requestAnimationFrame(animate);
+    if (running) animation = requestAnimationFrame(loop);
   }
-  ui.start.addEventListener('click', () => {
-    frog = { x: 8, y: 18 }; lives = 3; score = 0; readout();
+  function start() {
+    celebrating = false;
+    delete ui.canvas.dataset.celebrating;
+    cancelAnimationFrame(animation); animation = 0;
+    level = 0; lives = 3; score = 0; frog = { x: 8, y: 18 };
+    buildRoad(); readout();
     ui.status.textContent = 'CROSS THE ROAD';
     ui.start.textContent = 'RESTART';
     running = true;
-    if (!animation) animation = requestAnimationFrame(animate);
+    animation = requestAnimationFrame(loop);
     draw();
-  });
+  }
+  ui.start.addEventListener('click', start);
   const unbind = ui.onMove(requested => {
     if (!running) return;
     const vector = VECTORS[requested];
     frog = { x: Math.max(0, Math.min(17, frog.x + vector.x)), y: Math.max(0, Math.min(19, frog.y + vector.y)) };
-    if (frog.y <= 1) { score += 100; readout(); ui.status.textContent = 'HOME! +100'; frog = { x: 8, y: 18 }; }
-    draw();
+    if (frog.y <= 1) crossed();
+    else draw();
   });
-  draw();
-  return () => { running = false; cancelAnimationFrame(animation); unbind(); };
+  buildRoad(); readout(); draw();
+  document.fonts?.ready.then(() => { if (!running && !celebrating) draw(); });
+  return () => { running = false; celebrating = false; cancelAnimationFrame(animation); unbind(); };
 }
