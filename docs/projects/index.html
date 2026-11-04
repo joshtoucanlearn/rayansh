@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Rayansh's projects</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <main class="projects">
+    <div class="projects-top">
+      <h1>Projects</h1>
+      <a class="home-link" href="../">Home</a>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Choose a project">
+      <button type="button" role="tab" data-project="snake" aria-selected="true">Snake</button>
+      <button type="button" role="tab" data-project="frogger" aria-selected="false">Frogger</button>
+      <button type="button" role="tab" data-project="piano" aria-selected="false">Piano</button>
+    </div>
+    <section id="stage" role="tabpanel" aria-live="polite"></section>
+  </main>
+  <script type="module">
+    import { initSky } from '../assets/sky.js';
+    import { mountSnake, mountFrogger } from '../assets/arcade.js';
+    import { mountPiano } from '../assets/piano.js';
+    initSky();
+    const projects = { snake: mountSnake, frogger: mountFrogger, piano: mountPiano };
+    const stage = document.getElementById('stage');
+    const tabs = [...document.querySelectorAll('[data-project]')];
+    let destroy = () => {};
+    function open(name) {
+      destroy();
+      stage.replaceChildren();
+      tabs.forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.project === name)));
+      destroy = projects[name](stage) || (() => {});
+      if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    }
+    tabs.forEach(tab => tab.addEventListener('click', () => open(tab.dataset.project)));
+    open(projects[location.hash.slice(1)] ? location.hash.slice(1) : 'snake');
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Rayansh</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main class="home">
+    <h1 class="greeting" aria-label="Hello Rayansh"><span id="typed" aria-hidden="true"></span><span class="cursor" aria-hidden="true">█</span></h1>
+    <a class="projects-button" id="projects" href="projects/" hidden>Projects</a>
+  </main>
+  <script type="module">
+    import { initSky } from './assets/sky.js';
+    initSky();
+    const message = 'Hello Rayansh';
+    const typed = document.getElementById('typed');
+    const button = document.getElementById('projects');
+    const done = () => { typed.textContent = message; button.hidden = false; };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+    else {
+      let shown = 0;
+      const timer = setInterval(() => {
+        typed.textContent = message.slice(0, ++shown);
+        if (shown >= message.length) { clearInterval(timer); setTimeout(done, 250); }
+      }, 110);
+    }
+  </script>
+</body>
+</html>
